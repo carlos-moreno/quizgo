@@ -1,3 +1,6 @@
+// Package main implementa um jogo de quiz interativo via linha de comando.
+// Ele lê perguntas de um arquivo CSV, permite que o usuário escolha a quantidade
+// de questões e calcula o percentual de acerto ao final.
 package main
 
 import (
@@ -10,19 +13,26 @@ import (
 	"strings"
 )
 
+// Question representa uma única pergunta do quiz, contendo seu enunciado,
+// as opções de resposta e a resposta correta para validação.
 type Question struct {
 	Text    string
 	Options []string
 	Answer  string
 }
 
+// GameState armazena o estado atual da sessão do jogo, incluindo os dados
+// do jogador, pontuação e o conjunto de perguntas disponíveis.
 type GameState struct {
 	Name           string
 	CorrectAnswers int
-	Questions      []Question
-	AllQuestions   []Question
+	Questions      []Question // Perguntas selecionadas para a rodada atual
+	AllQuestions   []Question // Cópia de segurança de todas as perguntas do CSV
 }
 
+// ProccessCSV carrega as perguntas a partir de um arquivo CSV local.
+// O arquivo deve estar localizado em "assets/quiz-go.csv" e seguir o formato:
+// Pergunta, Opção1, Opção2, Opção3, Opção4, RespostaCorreta.
 func (g *GameState) ProccessCSV() {
 	f, err := os.Open("assets/quiz-go.csv")
 	if err != nil {
@@ -49,6 +59,8 @@ func (g *GameState) ProccessCSV() {
 	}
 }
 
+// Init inicializa a sessão do jogo, solicitando o nome do jogador (caso ainda não definido)
+// e definindo o limite de perguntas que serão respondidas na rodada.
 func (g *GameState) Init() {
 	reader := bufio.NewReader(os.Stdin)
 
@@ -86,6 +98,8 @@ func (g *GameState) Init() {
 	fmt.Printf("Vamos ao jogo!\n\n")
 }
 
+// Run executa o loop principal do jogo, exibindo as perguntas, processando
+// as respostas do usuário e contabilizando os acertos.
 func (g *GameState) Run() {
 	reader := bufio.NewReader(os.Stdin)
 
@@ -144,6 +158,7 @@ func (g *GameState) Run() {
 	fmt.Printf("Percentual de acerto: %.2f%%\n\n", percent)
 }
 
+// main é o ponto de entrada do programa. Gerencia o fluxo de reinicialização do jogo.
 func main() {
 	game := &GameState{}
 	game.ProccessCSV()

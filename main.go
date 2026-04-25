@@ -8,7 +8,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type Question struct {
@@ -18,40 +17,10 @@ type Question struct {
 }
 
 type GameState struct {
-	Name      string
-	Points    int
-	Questions []Question
-}
-
-func (g *GameState) Init() {
-	reader := bufio.NewReader(os.Stdin)
-
-	fmt.Println("Seja bem vindo(a) ao quiz")
-	fmt.Print("Escreva o seu nome: ")
-	name, _ := reader.ReadString('\n')
-	g.Name = strings.TrimSpace(name)
-
-	fmt.Printf("Olá %s, o arquivo contém %d perguntas.\n", g.Name, len(g.Questions))
-
-	for {
-		fmt.Printf("Quantas perguntas você deseja responder? (1 a %d): ", len(g.Questions))
-		input, _ := reader.ReadString('\n')
-		limit, err := strconv.Atoi(strings.TrimSpace(input))
-
-		if err != nil || limit < 1 || limit > len(g.Questions) {
-			fmt.Println("\033[31mQuantidade inválida!\033[0m")
-			continue
-		}
-
-		rand.Seed(time.Now().UnixNano())
-		rand.Shuffle(len(g.Questions), func(i, j int) {
-			g.Questions[i], g.Questions[j] = g.Questions[j], g.Questions[i]
-		})
-		g.Questions = g.Questions[:limit]
-		break
-	}
-
-	fmt.Printf("Vamos ao jogo!\n\n")
+	Name           string
+	CorrectAnswers int
+	Questions      []Question
+	AllQuestions   []Question
 }
 
 func (g *GameState) ProccessCSV() {
@@ -70,26 +39,61 @@ func (g *GameState) ProccessCSV() {
 	for idx, record := range records {
 		if idx > 0 {
 			options := record[1:5]
-
-			rand.Seed(time.Now().UnixNano())
-			rand.Shuffle(len(options), func(i, j int) {
-				options[i], options[j] = options[j], options[i]
-			})
-
 			question := Question{
 				Text:    record[0],
 				Options: options,
 				Answer:  record[5],
 			}
-			g.Questions = append(g.Questions, question)
+			g.AllQuestions = append(g.AllQuestions, question)
 		}
 	}
+}
+
+func (g *GameState) Init() {
+	reader := bufio.NewReader(os.Stdin)
+
+	if g.Name == "" {
+		fmt.Println("Seja bem vindo(a) ao quiz")
+		fmt.Print("Escreva o seu nome: ")
+		name, _ := reader.ReadString('\n')
+		g.Name = strings.TrimSpace(name)
+	}
+
+	fmt.Printf("\nOlá %s, o arquivo contém %d perguntas.\n", g.Name, len(g.AllQuestions))
+
+	for {
+		fmt.Printf("Quantas perguntas você deseja responder? (1 a %d): ", len(g.AllQuestions))
+		input, _ := reader.ReadString('\n')
+		limit, err := strconv.Atoi(strings.TrimSpace(input))
+
+		if err != nil || limit < 1 || limit > len(g.AllQuestions) {
+			fmt.Println("\033[31mQuantidade inválida!\033[0m")
+			continue
+		}
+
+		g.CorrectAnswers = 0
+		g.Questions = make([]Question, len(g.AllQuestions))
+		copy(g.Questions, g.AllQuestions)
+
+		rand.Shuffle(len(g.Questions), func(i, j int) {
+			g.Questions[i], g.Questions[j] = g.Questions[j], g.Questions[i]
+		})
+
+		g.Questions = g.Questions[:limit]
+		break
+	}
+
+	fmt.Printf("Vamos ao jogo!\n\n")
 }
 
 func (g *GameState) Run() {
 	reader := bufio.NewReader(os.Stdin)
 
 	for idx, question := range g.Questions {
+		rand.Shuffle(len(question.Options), func(i, j int) {
+			question.Options[i], question.Options[j] = question.Options[j], question.Options[i]
+		})
+
 		fmt.Printf("\033[33m %d. %s\033[0m\n", idx+1, question.Text)
 
 		for i, option := range question.Options {
@@ -127,20 +131,53 @@ func (g *GameState) Run() {
 
 		if question.Options[answer-1] == question.Answer {
 			fmt.Println("\033[32mParabéns você acertou!!!\033[0m")
-			g.Points += 10
+			g.CorrectAnswers++
 		} else {
 			fmt.Printf("\033[31mResposta incorreta!!!\033[0m\n")
 		}
 		fmt.Println(strings.Repeat("-", 60))
 	}
+
+	percent := (float64(g.CorrectAnswers) / float64(len(g.Questions))) * 100
+	fmt.Printf("\nFim de jogo %s!\n", g.Name)
+	fmt.Printf("Você acertou %d de %d questões.\n", g.CorrectAnswers, len(g.Questions))
+	fmt.Printf("Percentual de acerto: %.2f%%\n\n", percent)
 }
 
 func main() {
-	game := &GameState{Points: 0}
-
+	game := &GameState{}
 	game.ProccessCSV()
-	game.Init()
-	game.Run()
+	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Printf("Fim de jogo %s, você fez %d pontos.\n", game.Name, game.Points)
+	for {
+		game.Init()
+		game.Run()
+
+		erroValidacao := false
+		for {
+			fmt.Print("Deseja jogar novamente? [Y/n]: ")
+			input, _ := reader.ReadString('\n')
+			input = strings.TrimSpace(strings.ToLower(input))
+
+			if input == "" || input == "y" {
+				if erroValidacao {
+					fmt.Print("\033[1A\033[K")
+					fmt.Print("\033[1A\033[K")
+				}
+				break
+			}
+
+			if input == "n" {
+				fmt.Println("Obrigado por jogar! Até a próxima.")
+				return
+			}
+
+			fmt.Print("\033[1A\033[K")
+			if erroValidacao {
+				fmt.Print("\033[1A\033[K")
+			}
+			fmt.Println("\033[31mOpção inválida! Digite 'y' para sim ou 'n' para não.\033[0m")
+			erroValidacao = true
+		}
+	}
 }
